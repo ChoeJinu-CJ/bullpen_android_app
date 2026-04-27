@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="stadium_bg">#0F1A14</color>
+    <color name="stadium_header">#0A130F</color>
+    <color name="stadium_accent">#5DCAA5</color>
+</resources>
