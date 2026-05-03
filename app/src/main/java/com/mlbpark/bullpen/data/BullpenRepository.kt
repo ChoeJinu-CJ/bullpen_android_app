@@ -72,28 +72,35 @@ class BullpenRepository {
     /**
      * 글 상세 페이지를 가져온다.
      *
-     * 파싱 전략 (mlbpark는 표준적인 게시판 레이아웃을 사용):
-     *  - 제목/작성자/시간/카테고리는 목록 페이지와 동일 클래스를 재사용하는 경우가 많음.
-     *  - 본문 컨테이너 후보를 순서대로 시도: #contents, .article_word, .view_content,
-     *    그리고 마지막 폴백으로 가장 큰 텍스트 블록을 찾는다.
+     * 파싱 전략 (사용자가 확인해 준 mlbpark 상세 페이지의 실제 셀렉터):
+     *  - 글 컨테이너:  div.contents
+     *  - 제목:        div.titles
+     *  - 카테고리:    span.word
+     *  - 작성자:      span.nick
+     *  - 작성시간:    span.val
+     *  - 본문:        div.view_context
+     *
+     * 우선 글 컨테이너(div.contents) 안에서 메타데이터를 찾고, 없으면 문서 전체에서
+     * 같은 셀렉터로 한 번 더 시도한다. 이렇게 하면 메인 게시글 외에 관련글 섹션이
+     * 같은 클래스를 재사용하더라도 본문 메타와 섞이지 않는다.
      */
     fun fetchDetail(detailUrl: String): PostDetail {
         val doc = fetchDocument(detailUrl)
 
-        val title = doc.selectFirst("a.txt")?.text()?.trim()
-            ?: doc.selectFirst("h1, .tit, .view_tit")?.text()?.trim().orEmpty()
-        val category = doc.selectFirst("a.list_word")?.text()?.trim()?.takeIf { it.isNotEmpty() }
-        val author = doc.selectFirst("span.nick")?.text()?.trim().orEmpty()
-        val time = doc.selectFirst("span.date")?.text()?.trim().orEmpty()
+        // 글 컨테이너. 없으면 문서 전체를 fallback 으로 사용.
+        val container: Element = doc.selectFirst("div.contents") ?: doc
 
-        // 본문 컨테이너 후보
-        val bodyEl: Element? = listOf(
-            "#contents",
-            ".article_word",
-            ".view_content",
-            ".bbs_view",
-            "#user_contents",
-        ).firstNotNullOfOrNull { sel -> doc.selectFirst(sel) }
+        val title = container.selectFirst("div.titles")?.text()?.trim()
+            // fallback: 일부 페이지에서 제목이 컨테이너 밖에 있을 가능성 대비
+            ?: doc.selectFirst("div.titles")?.text()?.trim().orEmpty()
+        val category = container.selectFirst("span.word")?.text()?.trim()
+            ?.takeIf { it.isNotEmpty() }
+        val author = container.selectFirst("span.nick")?.text()?.trim().orEmpty()
+        val time = container.selectFirst("span.val")?.text()?.trim().orEmpty()
+
+        // 본문 — 정확히 사용자 가이드 그대로
+        val bodyEl: Element? = container.selectFirst("div.view_context")
+            ?: doc.selectFirst("div.view_context")
 
         val blocks: List<BodyBlock> = bodyEl?.let { extractBodyBlocks(it) } ?: emptyList()
 

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
@@ -28,7 +29,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,6 +60,15 @@ fun ListScreen(
     val state by viewModel.state.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
 
+    // 목록의 스크롤 위치를 관찰. 사용자가 위로 스크롤하다가 맨 위에서 더 당기면
+    // pull-to-refresh 가 발동하도록, 맨 위에 있을 때만 pull-refresh 를 활성화한다.
+    val listState = rememberLazyListState()
+    val isAtTop by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+        }
+    }
+
     val pullState = rememberPullRefreshState(
         refreshing = isRefreshing,
         onRefresh = { viewModel.refresh() },
@@ -72,13 +84,16 @@ fun ListScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pullRefresh(pullState),
+                // 맨 위가 아닐 때는 pullRefresh 를 붙이지 않아, 스와이프 제스처가
+                // LazyColumn 의 스크롤로만 흘러가게 한다.
+                .then(if (isAtTop) Modifier.pullRefresh(pullState) else Modifier),
         ) {
             when (val s = state) {
                 UiState.Loading -> LoadingView()
                 is UiState.Error -> ErrorView(message = s.message, onRetry = { viewModel.retry() })
                 is UiState.Success -> {
                     LazyColumn(
+                        state = listState,
                         contentPadding = PaddingValues(bottom = 24.dp),
                     ) {
                         items(s.data, key = { it.id }) { post ->
